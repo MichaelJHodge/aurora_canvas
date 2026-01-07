@@ -19,7 +19,8 @@ class SquareImage extends StatelessWidget {
     final theme = Theme.of(context);
 
     final screenW = MediaQuery.sizeOf(context).width;
-    final size = (screenW - 40).clamp(240, 380).toDouble();
+    final available = (screenW - 40).clamp(0.0, double.infinity);
+    final size = available.clamp(0.0, 380.0); // allows tiny screens
 
     return Semantics(
       label: 'Random image',

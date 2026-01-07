@@ -42,7 +42,7 @@ class ErrorBanner extends StatelessWidget {
                   ),
                 ),
               ),
-              ...actions,
+              if (actions.isNotEmpty) Wrap(spacing: 4, children: actions),
               if (onDismiss != null)
                 IconButton(
                   onPressed: onDismiss,

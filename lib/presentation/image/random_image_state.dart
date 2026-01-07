@@ -42,13 +42,15 @@ class RandomImageState {
 
   bool get showErrorBanner => errorMessage != null && hasEverLoaded;
 
+  static const Object _unset = Object();
+
   RandomImageState copyWith({
     LoadStatus? status,
     ImageProvider? imageProvider,
     int? imageRevision,
     Color? fallbackBackground,
     ColorScheme? scheme,
-    String? errorMessage,
+    Object? errorMessage = _unset,
     bool? hasEverLoaded,
   }) {
     return RandomImageState(
@@ -57,7 +59,9 @@ class RandomImageState {
       imageRevision: imageRevision ?? this.imageRevision,
       fallbackBackground: fallbackBackground ?? this.fallbackBackground,
       scheme: scheme ?? this.scheme,
-      errorMessage: errorMessage,
+      errorMessage: identical(errorMessage, _unset)
+          ? this.errorMessage
+          : errorMessage as String?,
       hasEverLoaded: hasEverLoaded ?? this.hasEverLoaded,
     );
   }

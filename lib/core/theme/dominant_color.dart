@@ -5,12 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 /// Computes a reasonably “dominant” color from image bytes.
-///
-/// Why not ColorScheme.fromImageProvider?
-/// - It can throw (404s, decoding errors)
-/// - It can cause ImageStream disposed issues
-/// - It may pick weird colors for some images
-///
+
 /// This approach:
 /// 1) Decodes a small image (we fetch a thumbnail).
 /// 2) Samples pixels on a grid.
@@ -26,90 +21,86 @@ Future<Color?> dominantColorFromBytes(
     return null;
   }
 
-  final byteData = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
-  if (byteData == null) return null;
+  try {
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (byteData == null) return null;
 
-  final data = byteData.buffer.asUint8List();
-  final w = img.width;
-  final h = img.height;
+    final data = byteData.buffer.asUint8List();
+    final w = img.width;
+    final h = img.height;
 
-  // Grid sampling step.
-  final stepX = math.max(1, (w / sampleGrid).floor());
-  final stepY = math.max(1, (h / sampleGrid).floor());
+    // Grid sampling step.
+    final stepX = math.max(1, (w / sampleGrid).floor());
+    final stepY = math.max(1, (h / sampleGrid).floor());
 
-  // HSV buckets: hue 12 bins, sat 3 bins, val 3 bins.
-  const hueBins = 12;
-  const satBins = 3;
-  const valBins = 3;
+    // HSV buckets: hue 12 bins, sat 3 bins, val 3 bins.
+    const hueBins = 12;
+    const satBins = 3;
+    const valBins = 3;
 
-  int bucketIndex(int hb, int sb, int vb) =>
-      (hb * satBins * valBins) + (sb * valBins) + vb;
+    int bucketIndex(int hb, int sb, int vb) =>
+        (hb * satBins * valBins) + (sb * valBins) + vb;
 
-  final counts = List<int>.filled(hueBins * satBins * valBins, 0);
+    final counts = List<int>.filled(hueBins * satBins * valBins, 0);
 
-  // Store sums to compute an average color for the winning bucket.
-  final sumR = List<int>.filled(counts.length, 0);
-  final sumG = List<int>.filled(counts.length, 0);
-  final sumB = List<int>.filled(counts.length, 0);
+    // Store sums to compute an average color for the winning bucket.
+    final sumR = List<int>.filled(counts.length, 0);
+    final sumG = List<int>.filled(counts.length, 0);
+    final sumB = List<int>.filled(counts.length, 0);
 
-  // Helper to convert RGB->HSV-ish buckets quickly.
-  for (int y = 0; y < h; y += stepY) {
-    for (int x = 0; x < w; x += stepX) {
-      final i = (y * w + x) * 4;
+    for (int y = 0; y < h; y += stepY) {
+      for (int x = 0; x < w; x += stepX) {
+        final i = (y * w + x) * 4;
 
-      final r = data[i];
-      final g = data[i + 1];
-      final b = data[i + 2];
-      final a = data[i + 3];
+        final r = data[i];
+        final g = data[i + 1];
+        final b = data[i + 2];
+        final a = data[i + 3];
 
-      if (a < 40) continue; // ignore near-transparent
+        if (a < 40) continue;
 
-      final color = Color.fromARGB(a, r, g, b);
-      final hsv = HSVColor.fromColor(color);
+        final color = Color.fromARGB(a, r, g, b);
+        final hsv = HSVColor.fromColor(color);
 
-      // Ignore near-greys / extremely dark pixels.
-      if (hsv.saturation < 0.08) continue;
-      if (hsv.value < 0.10) continue;
+        if (hsv.saturation < 0.08) continue;
+        if (hsv.value < 0.10) continue;
 
-      final hb = ((hsv.hue / 360.0) * hueBins).floor().clamp(0, hueBins - 1);
-      final sb = (hsv.saturation * satBins).floor().clamp(0, satBins - 1);
-      final vb = (hsv.value * valBins).floor().clamp(0, valBins - 1);
+        final hb = ((hsv.hue / 360.0) * hueBins).floor().clamp(0, hueBins - 1);
+        final sb = (hsv.saturation * satBins).floor().clamp(0, satBins - 1);
+        final vb = (hsv.value * valBins).floor().clamp(0, valBins - 1);
 
-      final idx = bucketIndex(hb, sb, vb);
+        final idx = bucketIndex(hb, sb, vb);
 
-      // Weight toward nicer “aurora” colors:
-      // saturated + brighter pixels should matter more.
-      final weight = 1 + (hsv.saturation * 2).round() + (hsv.value * 2).round();
+        final weight =
+            1 + (hsv.saturation * 2).round() + (hsv.value * 2).round();
 
-      counts[idx] += weight;
-      sumR[idx] += r * weight;
-      sumG[idx] += g * weight;
-      sumB[idx] += b * weight;
+        counts[idx] += weight;
+        sumR[idx] += r * weight;
+        sumG[idx] += g * weight;
+        sumB[idx] += b * weight;
+      }
     }
-  }
 
-  int best = -1;
-  int bestCount = 0;
-  for (int i = 0; i < counts.length; i++) {
-    if (counts[i] > bestCount) {
-      bestCount = counts[i];
-      best = i;
+    int best = -1;
+    int bestCount = 0;
+    for (int i = 0; i < counts.length; i++) {
+      if (counts[i] > bestCount) {
+        bestCount = counts[i];
+        best = i;
+      }
     }
+
+    if (best <= -1 || bestCount == 0) return null;
+
+    final rr = (sumR[best] / bestCount).round().clamp(0, 255);
+    final gg = (sumG[best] / bestCount).round().clamp(0, 255);
+    final bb = (sumB[best] / bestCount).round().clamp(0, 255);
+
+    final base = Color.fromARGB(255, rr, gg, bb);
+    final hsl = HSLColor.fromColor(base);
+
+    return hsl.withLightness((hsl.lightness + 0.08).clamp(0.0, 1.0)).toColor();
+  } finally {
+    img.dispose();
   }
-
-  if (best <= -1 || bestCount == 0) return null;
-
-  final rr = (sumR[best] / bestCount).round().clamp(0, 255);
-  final gg = (sumG[best] / bestCount).round().clamp(0, 255);
-  final bb = (sumB[best] / bestCount).round().clamp(0, 255);
-
-  // Slight lift to avoid muddy backgrounds.
-  final lifted = HSLColor.fromColor(Color.fromARGB(255, rr, gg, bb))
-      .withLightness(
-        (HSLColor.fromColor(Color.fromARGB(255, rr, gg, bb)).lightness + 0.08)
-            .clamp(0.0, 1.0),
-      )
-      .toColor();
-
-  return lifted;
 }

@@ -13,14 +13,15 @@ import 'random_image_state.dart';
 
 class RandomImageController extends ChangeNotifier {
   RandomImageController(this._repo, {http.Client? httpClient})
-    : _http = httpClient ?? http.Client();
+    : _http = httpClient ?? http.Client(),
+      _ownsHttpClient = httpClient == null;
 
   final RandomImageRepository _repo;
   final http.Client _http;
 
   RandomImageState _state = RandomImageState.initial();
   RandomImageState get state => _state;
-
+  final bool _ownsHttpClient;
   Timer? _errorAutoDismissTimer;
 
   Future<void> init() async {
@@ -168,5 +169,16 @@ class RandomImageController extends ChangeNotifier {
       return 'Timed out loading an image. Please try again.';
     }
     return 'Couldn’t load a new image. Please try again.';
+  }
+
+  @override
+  void dispose() {
+    _errorAutoDismissTimer?.cancel();
+    _errorAutoDismissTimer = null;
+
+    if (_ownsHttpClient) {
+      _http.close();
+    }
+    super.dispose();
   }
 }

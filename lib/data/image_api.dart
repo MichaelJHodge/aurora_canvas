@@ -7,13 +7,20 @@ import '../domain/failures.dart';
 import '../domain/random_image.dart';
 
 class RandomImageApi {
-  RandomImageApi({http.Client? client}) : _client = client ?? http.Client();
+  RandomImageApi({http.Client? client})
+    : _client = client ?? http.Client(),
+      _ownsClient = client == null;
 
   final http.Client _client;
+  final bool _ownsClient;
 
   static final Uri _endpoint = Uri.parse(
     'https://november7-730026606190.europe-west1.run.app/image',
   );
+
+  void dispose() {
+    if (_ownsClient) _client.close();
+  }
 
   Future<RandomImage> fetchRandomImage() async {
     try {
@@ -37,8 +44,8 @@ class RandomImageApi {
       throw const InvalidResponseFailure();
     } on AppFailure {
       rethrow;
-    } catch (e) {
-      throw UnknownFailure(e);
+    } catch (e, st) {
+      Error.throwWithStackTrace(UnknownFailure(e), st);
     }
   }
 }

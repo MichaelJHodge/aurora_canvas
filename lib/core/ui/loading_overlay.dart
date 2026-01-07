@@ -21,20 +21,24 @@ class LoadingOverlay extends StatelessWidget {
     if (!isVisible) return const SizedBox.shrink();
 
     return Positioned.fill(
-      child: IgnorePointer(
-        ignoring: true,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(borderRadius),
-          child: ColoredBox(
-            color: Colors.black.withOpacity(scrimOpacity),
-            child: Center(
-              child:
-                  indicator ??
-                  const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+      child: Semantics(
+        label: 'Loading',
+        liveRegion: true,
+        child: IgnorePointer(
+          ignoring: true,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(borderRadius),
+            child: ColoredBox(
+              color: Colors.black.withOpacity(scrimOpacity),
+              child: Center(
+                child:
+                    indicator ??
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+              ),
             ),
           ),
         ),

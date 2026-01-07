@@ -17,9 +17,13 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<RandomImageApi>(create: (_) => RandomImageApi()),
-        ProxyProvider<RandomImageApi, RandomImageRepository>(
-          update: (_, api, __) => RandomImageRepository(api),
+        Provider<RandomImageApi>(
+          create: (_) => RandomImageApi(),
+          dispose: (_, api) => api.dispose(),
+        ),
+        Provider<RandomImageRepository>(
+          create: (context) =>
+              RandomImageRepository(context.read<RandomImageApi>()),
         ),
         ChangeNotifierProvider<RandomImageController>(
           create: (context) =>

@@ -142,7 +142,7 @@ class _RandomImageScreenState extends State<RandomImageScreen>
                       left: 12,
                       right: 12,
                       child: ErrorBanner(
-                        key: Key('error_banner'),
+                        key: const Key('error_banner'),
                         message: state.errorMessage!,
                         actions: [
                           TextButton(
