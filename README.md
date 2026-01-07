@@ -70,3 +70,7 @@ flutter run
 ## Demo
 
 Demo video: 
+
+https://github.com/user-attachments/assets/bc4d2090-8a8c-40ee-8b69-0baade20c984
+
+
