@@ -71,6 +71,11 @@ flutter run
 
 Demo video: 
 
-https://github.com/user-attachments/assets/bc4d2090-8a8c-40ee-8b69-0baade20c984
+iOS: https://github.com/user-attachments/assets/bc4d2090-8a8c-40ee-8b69-0baade20c984
+
+Android: https://github.com/user-attachments/assets/59e674aa-9e39-4682-b918-a85bd12e4660
+
+
+
 
 
