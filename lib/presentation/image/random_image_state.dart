@@ -2,59 +2,63 @@ import 'package:flutter/material.dart';
 
 enum LoadStatus { initial, loading, success, error }
 
-@immutable
 class RandomImageState {
-  final LoadStatus status;
-  final Uri? imageUrl;
-  final Uri? previousImageUrl;
+  const RandomImageState({
+    required this.status,
+    required this.imageProvider,
+    required this.imageRevision,
+    required this.fallbackBackground,
+    required this.scheme,
+    required this.errorMessage,
+    required this.hasEverLoaded,
+  });
 
-  final ColorScheme? scheme;
+  factory RandomImageState.initial() => RandomImageState(
+    status: LoadStatus.initial,
+    imageProvider: null,
+    imageRevision: 0,
+    fallbackBackground: Colors.black,
+    scheme: null,
+    errorMessage: null,
+    hasEverLoaded: false,
+  );
+
+  final LoadStatus status;
+  final ImageProvider? imageProvider;
+  final int imageRevision;
+
   final Color fallbackBackground;
+  final ColorScheme? scheme;
 
   final String? errorMessage;
 
-  const RandomImageState({
-    required this.status,
-    required this.imageUrl,
-    required this.previousImageUrl,
-    required this.scheme,
-    required this.fallbackBackground,
-    required this.errorMessage,
-  });
-
-  factory RandomImageState.initial() => const RandomImageState(
-    status: LoadStatus.initial,
-    imageUrl: null,
-    previousImageUrl: null,
-    scheme: null,
-    fallbackBackground: Colors.black,
-    errorMessage: null,
-  );
+  /// Whether we've successfully shown at least one image before.
+  /// This lets us differentiate “first load” UX.
+  final bool hasEverLoaded;
 
   bool get isFetching => status == LoadStatus.loading;
 
-  bool get hasImage => imageUrl != null;
+  bool get isInitialLoadFailure => status == LoadStatus.error && !hasEverLoaded;
 
-  bool get showErrorBanner => (errorMessage?.isNotEmpty ?? false);
-
-  bool get isInitialLoadFailure =>
-      status == LoadStatus.error && imageUrl == null;
+  bool get showErrorBanner => errorMessage != null && hasEverLoaded;
 
   RandomImageState copyWith({
     LoadStatus? status,
-    Uri? imageUrl,
-    Uri? previousImageUrl,
-    ColorScheme? scheme,
+    ImageProvider? imageProvider,
+    int? imageRevision,
     Color? fallbackBackground,
+    ColorScheme? scheme,
     String? errorMessage,
+    bool? hasEverLoaded,
   }) {
     return RandomImageState(
       status: status ?? this.status,
-      imageUrl: imageUrl ?? this.imageUrl,
-      previousImageUrl: previousImageUrl ?? this.previousImageUrl,
-      scheme: scheme ?? this.scheme,
+      imageProvider: imageProvider ?? this.imageProvider,
+      imageRevision: imageRevision ?? this.imageRevision,
       fallbackBackground: fallbackBackground ?? this.fallbackBackground,
+      scheme: scheme ?? this.scheme,
       errorMessage: errorMessage,
+      hasEverLoaded: hasEverLoaded ?? this.hasEverLoaded,
     );
   }
 }

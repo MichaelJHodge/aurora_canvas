@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'random_image_controller.dart';
-import 'random_image_state.dart';
-import 'widgets/another_button.dart';
-import 'widgets/initial_error_state.dart';
-import '../../core/ui/error_banner.dart';
-import '../../core/ui/loading_overlay.dart';
-import 'widgets/square_image.dart';
+import '../../core/ui/ui.dart';
+import 'image_feature.dart';
+import 'widgets/widgets.dart';
 
 class RandomImageScreen extends StatefulWidget {
   const RandomImageScreen({super.key});
@@ -16,13 +12,59 @@ class RandomImageScreen extends StatefulWidget {
   State<RandomImageScreen> createState() => _RandomImageScreenState();
 }
 
-class _RandomImageScreenState extends State<RandomImageScreen> {
+class _RandomImageScreenState extends State<RandomImageScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _intro;
+  late Animation<double> _fade;
+  late Animation<double> _scale;
+  late Animation<Offset> _lift;
+
+  bool _playedFirstIntro = false;
+
   @override
   void initState() {
     super.initState();
+
+    // IMPORTANT: Create the controller in initState (not a field initializer),
+    // so it can properly read TickerMode and won't crash in widget tests / teardown.
+    _intro = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    );
+
+    _fade = CurvedAnimation(parent: _intro, curve: Curves.easeOutCubic);
+
+    _scale = Tween<double>(
+      begin: 0.92,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _intro, curve: Curves.easeOutBack));
+
+    _lift = Tween<Offset>(
+      begin: const Offset(0, 0.015),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _intro, curve: Curves.easeOutCubic));
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<RandomImageController>().init();
     });
+  }
+
+  @override
+  void dispose() {
+    _intro.dispose();
+    super.dispose();
+  }
+
+  void _maybePlayIntro(RandomImageState state) {
+    if (_playedFirstIntro) return;
+
+    // We only want to animate the first card entrance once we have an image provider.
+    final ready = state.imageProvider != null;
+    if (!ready) return;
+
+    _playedFirstIntro = true;
+    _intro.forward(from: 0);
   }
 
   @override
@@ -32,7 +74,36 @@ class _RandomImageScreenState extends State<RandomImageScreen> {
     return Consumer<RandomImageController>(
       builder: (context, controller, _) {
         final state = controller.state;
+
+        _maybePlayIntro(state);
+
         final bg = controller.blendedBackgroundForTheme(theme);
+
+        // Base image card (image + overlay).
+        Widget imageCard = Stack(
+          children: [
+            SquareImage(
+              imageProvider: state.imageProvider,
+              imageRevision: state.imageRevision,
+              isLoading: state.isFetching && state.imageProvider != null,
+              isInitialLoading: state.imageProvider == null && state.isFetching,
+            ),
+            LoadingOverlay(
+              isVisible: state.isFetching && state.imageProvider != null,
+            ),
+          ],
+        );
+
+        // Apply intro animation only once (on first successful image).
+        if (_playedFirstIntro) {
+          imageCard = FadeTransition(
+            opacity: _fade,
+            child: SlideTransition(
+              position: _lift,
+              child: ScaleTransition(scale: _scale, child: imageCard),
+            ),
+          );
+        }
 
         return Scaffold(
           body: AnimatedContainer(
@@ -55,56 +126,23 @@ class _RandomImageScreenState extends State<RandomImageScreen> {
                           : Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Stack(
-                                  children: [
-                                    SquareImage(
-                                      imageUrl: state.imageUrl?.toString(),
-                                      placeholderUrl: state.previousImageUrl
-                                          ?.toString(),
-                                      isInitialLoading:
-                                          state.status == LoadStatus.initial ||
-                                          (state.imageUrl == null &&
-                                              state.isFetching),
-                                    ),
-                                    LoadingOverlay(isVisible: state.isFetching),
-                                  ],
-                                ),
+                                imageCard,
                                 const SizedBox(height: 16),
                                 AnotherButton(
                                   isLoading: state.isFetching,
-                                  onPressed: () async {
-                                    try {
-                                      await controller.fetchAnother();
-                                    } catch (_) {
-                                      if (!context.mounted) return;
-
-                                      // If it's not the initial load, a quick snackbar is a nice touch.
-                                      if (!controller
-                                          .state
-                                          .isInitialLoadFailure) {
-                                        final msg =
-                                            controller.state.errorMessage ??
-                                            'Something went wrong.';
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(content: Text(msg)),
-                                        );
-                                      }
-                                    }
-                                  },
+                                  onPressed: () => controller.fetchAnother(),
                                 ),
                               ],
                             ),
                     ),
                   ),
-
                   if (state.showErrorBanner && !state.isInitialLoadFailure)
                     Positioned(
                       top: 12,
                       left: 12,
                       right: 12,
                       child: ErrorBanner(
+                        key: Key('error_banner'),
                         message: state.errorMessage!,
                         actions: [
                           TextButton(

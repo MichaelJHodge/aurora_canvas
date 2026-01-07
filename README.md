@@ -34,7 +34,7 @@ The project is organized with clear separation of concerns:
 ```
 lib/
 ├─ core/
-│  ├─ theme/ # Image-based color extraction & background blending**
+│  ├─ theme/ # Image-based color extraction & background blending
 │  └─ ui/ # Shared UI primitives (error banner, loading overlay)
 │
 ├─ data/
@@ -42,7 +42,7 @@ lib/
 │  └─ random_image_repository.dart
 │
 ├─ domain/
-│  ├─ random_image.dart
+│  ├─ random_image.dart # Domain model
 │  └─ failures.dart # Typed failure models
 │
 ├─ presentation/
@@ -54,6 +54,11 @@ lib/
 │
 └─ main.dart
 ```
+
+## Testing
+- Basic unit tests for data and domain logic
+- Widget tests covering key UI states (loading, error, interactions)
+- Tests focus on behavior rather than implementation details.
 
 ## Running the App
 

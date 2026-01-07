@@ -1,27 +1,15 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
-/// Computes a ColorScheme from an image URL.
-/// Best-effort: returns null if the image can't be fetched/decoded.
-class ImageColorScheme {
-  static Future<ColorScheme?> fromUrl(
-    Uri imageUrl, {
-    required Brightness brightness,
-    int sampleSize = 128,
-  }) async {
-    try {
-      final provider = ResizeImage(
-        NetworkImage(imageUrl.toString()),
-        width: sampleSize,
-        height: sampleSize,
-        allowUpscaling: false,
-      );
+import 'dominant_color.dart';
 
-      return await ColorScheme.fromImageProvider(
-        provider: provider,
-        brightness: brightness,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
+Future<ColorScheme?> colorSchemeFromImageBytes({
+  required Uint8List bytes,
+  required Brightness brightness,
+}) async {
+  final dominant = await dominantColorFromBytes(bytes);
+  if (dominant == null) return null;
+
+  return ColorScheme.fromSeed(seedColor: dominant, brightness: brightness);
 }
