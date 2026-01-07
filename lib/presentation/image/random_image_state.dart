@@ -32,8 +32,6 @@ class RandomImageState {
 
   final String? errorMessage;
 
-  /// Whether we've successfully shown at least one image before.
-  /// This lets us differentiate “first load” UX.
   final bool hasEverLoaded;
 
   bool get isFetching => status == LoadStatus.loading;

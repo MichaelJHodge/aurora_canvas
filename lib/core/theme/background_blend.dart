@@ -15,10 +15,8 @@ Color blendedBackground({
   return Color.lerp(base, theme.colorScheme.surface, 0.22) ?? base;
 }
 
-/// A “wow” initial background (not flat grey).
 Color initialAuroraBackground(ThemeData theme) {
   final cs = theme.colorScheme;
-  // Keep it cohesive with theme + vibrant even on first load.
   return Color.lerp(cs.primaryContainer, cs.tertiaryContainer, 0.45) ??
       cs.primaryContainer;
 }

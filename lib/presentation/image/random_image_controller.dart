@@ -10,6 +10,8 @@ import '../../core/theme/image_color_scheme.dart';
 import '../../data/random_image_repository.dart';
 import '../../domain/failures.dart';
 import 'random_image_state.dart';
+import 'package:flutter/foundation.dart';
+import '../../domain/random_image.dart';
 
 class RandomImageController extends ChangeNotifier {
   RandomImageController(this._repo, {http.Client? httpClient})
@@ -18,134 +20,135 @@ class RandomImageController extends ChangeNotifier {
 
   final RandomImageRepository _repo;
   final http.Client _http;
+  final bool _ownsHttpClient;
 
   RandomImageState _state = RandomImageState.initial();
   RandomImageState get state => _state;
-  final bool _ownsHttpClient;
-  Timer? _errorAutoDismissTimer;
+
+  String? _lastImageId;
 
   Future<void> init() async {
     if (_state.status != LoadStatus.initial) return;
     await fetchAnother();
   }
 
-  void dismissError() {
-    _errorAutoDismissTimer?.cancel();
-    _errorAutoDismissTimer = null;
-
-    if (_state.errorMessage == null) return;
-    _state = _state.copyWith(errorMessage: null);
-    notifyListeners();
-  }
-
-  Future<void> fetchAnother() async {
+  Future<void> fetchAnother({BuildContext? context}) async {
     if (_state.isFetching) return;
 
-    // Start loading; keep current image visible.
-    _state = _state.copyWith(status: LoadStatus.loading, errorMessage: null);
+    // IMPORTANT:
+    // - We set loading, but we DO NOT clear errorMessage here.
+    //   This prevents the “it instantly worked” feeling after an error
+    //   (the error overlay stays until we actually have a good new image).
+    _state = _state.copyWith(status: LoadStatus.loading);
     notifyListeners();
 
     try {
-      final img = await _repo.getRandomImage();
+      // Try a few times to avoid duplicates / broken Unsplash URLs.
+      const maxAttempts = 5;
 
-      // 1) Validate image quickly + compute scheme from a small thumb.
-      final thumbBytes = await _fetchThumbnailBytes(img.url);
+      for (var attempt = 0; attempt < maxAttempts; attempt++) {
+        RandomImage img = await _repo.getRandomImage();
 
-      // 2) For the actual displayed image, request a reasonable size from Unsplash
-      //    (prevents huge downloads on mobile).
-      final displayUrl = _withQuery(img.url, {
-        'w': '900',
-        'h': '900',
-        'fit': 'crop',
-        'auto': 'format',
-        'q': '80',
-      });
+        // Avoid duplicates (best-effort)
+        int dedupeAttempts = 0;
+        while (img.url.toString() == _lastImageId && dedupeAttempts < 3) {
+          img = await _repo.getRandomImage();
+          dedupeAttempts++;
+        }
 
-      final provider = CachedNetworkImageProvider(displayUrl.toString());
+        final displayUrl = _withQuery(img.url, {
+          'w': '900',
+          'h': '900',
+          'fit': 'crop',
+          'auto': 'format',
+          'q': '85',
+        });
 
-      // Swap immediately (still "loading" so overlay can show)
-      _state = _state.copyWith(
-        imageProvider: provider,
-        imageRevision: _state.imageRevision + 1,
-      );
-      notifyListeners();
+        final thumbUrl = _withQuery(img.url, {
+          'w': '140',
+          'h': '140',
+          'fit': 'crop',
+          'auto': 'format',
+          'q': '60',
+        });
 
-      // Best-effort color scheme
-      final brightness =
-          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+        try {
+          // 1) Fetch bytes ourselves so 404s are handled as normal failures
+          //    (NO Flutter image pipeline exceptions / spam).
+          final displayBytes = await _fetchImageBytes(displayUrl);
+          final thumbBytes = await _fetchImageBytes(thumbUrl);
 
-      final scheme = await colorSchemeFromImageBytes(
-        bytes: thumbBytes,
-        brightness: brightness,
-      );
+          // 2) Now we can safely build a provider that can’t 404.
+          final provider = MemoryImage(displayBytes);
 
-      if (scheme != null) {
-        _state = _state.copyWith(
-          scheme: scheme,
-          fallbackBackground: scheme.primaryContainer,
-        );
-        notifyListeners();
+          // 3) Optional precache (now safe, because it’s memory-backed).
+          if (context != null && context.mounted) {
+            await precacheImage(provider, context);
+          }
+
+          // 4) Compute scheme
+          final brightness =
+              WidgetsBinding.instance.platformDispatcher.platformBrightness;
+
+          final scheme = await colorSchemeFromImageBytes(
+            bytes: thumbBytes,
+            brightness: brightness,
+          );
+
+          _lastImageId = img.url.toString();
+
+          _state = _state.copyWith(
+            imageProvider: provider,
+            imageRevision: _state.imageRevision + 1,
+            status: LoadStatus.success,
+            errorMessage: null,
+            hasEverLoaded: true,
+            scheme: scheme,
+            fallbackBackground: scheme?.primaryContainer,
+          );
+          notifyListeners();
+          return; // success, stop retrying
+        } on AppFailure {
+          // Broken URL / timeout / etc. Try another image.
+          continue;
+        } on TimeoutException {
+          continue;
+        } catch (_) {
+          // Treat any other unexpected image fetch failure as “try another”.
+          continue;
+        }
       }
 
-      _state = _state.copyWith(
-        status: LoadStatus.success,
-        errorMessage: null,
-        hasEverLoaded: true,
-      );
-      notifyListeners();
+      // If all attempts failed:
+      throw const NetworkTimeoutFailure();
     } catch (e) {
       final msg = _friendlyError(e);
 
-      final isFirstFailure = !_state.hasEverLoaded;
+      // If we’ve already shown an image once, keep the old image visible
+      // and just surface the error overlay on top.
+      final firstFailure = !_state.hasEverLoaded;
 
       _state = _state.copyWith(
-        status: isFirstFailure ? LoadStatus.error : LoadStatus.success,
-        errorMessage: isFirstFailure ? msg : msg,
+        status: firstFailure ? LoadStatus.error : LoadStatus.success,
+        errorMessage: msg,
       );
       notifyListeners();
-
-      // If it's not the initial load failure, auto-dismiss banner (no snackbar).
-      if (!isFirstFailure) {
-        _errorAutoDismissTimer?.cancel();
-        _errorAutoDismissTimer = Timer(const Duration(seconds: 4), () {
-          // Only dismiss if the same error is still showing.
-          if (_state.errorMessage == msg) dismissError();
-        });
+    } finally {
+      // Make sure we leave loading state if we didn't early-return.
+      if (_state.status == LoadStatus.loading) {
+        _state = _state.copyWith(
+          status: _state.hasEverLoaded ? LoadStatus.success : LoadStatus.error,
+        );
+        notifyListeners();
       }
-
-      // NOTE: We intentionally do NOT rethrow anymore.
-      // The UI will show the banner (and auto-dismiss it), avoiding double error UI.
     }
   }
 
-  Color blendedBackgroundForTheme(ThemeData theme) {
-    if (!_state.hasEverLoaded) {
-      return initialAuroraBackground(theme);
-    }
-
-    return blendedBackground(
-      theme: theme,
-      imageScheme: _state.scheme,
-      fallback: _state.fallbackBackground,
-    );
-  }
-
-  Future<Uint8List> _fetchThumbnailBytes(Uri imageUrl) async {
-    final thumb = _withQuery(imageUrl, {
-      'w': '240',
-      'h': '240',
-      'fit': 'crop',
-      'auto': 'format',
-      'q': '60',
-    });
-
-    final res = await _http.get(thumb).timeout(const Duration(seconds: 10));
-
+  Future<Uint8List> _fetchImageBytes(Uri url) async {
+    final res = await _http.get(url).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200 || res.bodyBytes.isEmpty) {
-      // Treat broken Unsplash links as failures so we never swap to a broken image.
       throw BadResponseFailure(res.statusCode);
     }
-
     return res.bodyBytes;
   }
 
@@ -160,7 +163,7 @@ class RandomImageController extends ChangeNotifier {
       return 'Timed out loading an image. Please try again.';
     }
     if (e is BadResponseFailure) {
-      return 'Couldn’t load that image (HTTP ${e.statusCode}). Tap Another to try again.';
+      return 'Couldn’t load that one. Let’s try another.';
     }
     if (e is InvalidResponseFailure) {
       return 'Received an invalid response from the server.';
@@ -168,17 +171,24 @@ class RandomImageController extends ChangeNotifier {
     if (e is TimeoutException) {
       return 'Timed out loading an image. Please try again.';
     }
-    return 'Couldn’t load a new image. Please try again.';
+    return 'Couldn’t load that one. Let’s try another.';
+  }
+
+  Color blendedBackgroundForTheme(ThemeData theme) {
+    if (!_state.hasEverLoaded) {
+      return initialAuroraBackground(theme);
+    }
+
+    return blendedBackground(
+      theme: theme,
+      imageScheme: _state.scheme,
+      fallback: _state.fallbackBackground,
+    );
   }
 
   @override
   void dispose() {
-    _errorAutoDismissTimer?.cancel();
-    _errorAutoDismissTimer = null;
-
-    if (_ownsHttpClient) {
-      _http.close();
-    }
+    if (_ownsHttpClient) _http.close();
     super.dispose();
   }
 }

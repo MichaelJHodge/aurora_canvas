@@ -21,7 +21,6 @@ class FakeRandomImageController extends ChangeNotifier
   RandomImageState _state;
 
   int fetchAnotherCalls = 0;
-  int dismissErrorCalls = 0;
   int initCalls = 0;
 
   @override
@@ -35,18 +34,11 @@ class FakeRandomImageController extends ChangeNotifier
   @override
   Future<void> init() async {
     initCalls++;
-    // Do nothing in tests; we’ll set state directly.
   }
 
   @override
-  Future<void> fetchAnother() async {
+  Future<void> fetchAnother({BuildContext? context}) async {
     fetchAnotherCalls++;
-  }
-
-  @override
-  void dismissError() {
-    dismissErrorCalls++;
-    state = state.copyWith(errorMessage: null);
   }
 
   @override
