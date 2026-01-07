@@ -2,6 +2,14 @@
 
 A small Flutter app that fetches and displays a random image from an API, with a background color that adapts to the image for an immersive effect.
 
+## Demo
+
+Demo video:
+
+iOS: https://github.com/user-attachments/assets/bc4d2090-8a8c-40ee-8b69-0baade20c984
+
+Android: https://github.com/user-attachments/assets/59e674aa-9e39-4682-b918-a85bd12e4660
+
 ## Features
 
 - Single-screen UI with a centered square image
@@ -66,14 +74,6 @@ lib/
 flutter pub get
 flutter run
 ```
-
-## Demo
-
-Demo video: 
-
-iOS: https://github.com/user-attachments/assets/bc4d2090-8a8c-40ee-8b69-0baade20c984
-
-Android: https://github.com/user-attachments/assets/59e674aa-9e39-4682-b918-a85bd12e4660
 
 
 
